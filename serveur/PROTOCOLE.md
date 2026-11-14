@@ -125,7 +125,9 @@ toujours les ressources, l'appartenance des cases et les cibles. Ce contrôle n'
 Les empreintes doivent concerner les 2000 derniers tours déjà émis et être des entiers non signés de 32 bits.
 
 Les tests et les mesures se trouvent dans [`docs/validation-multijoueur.md`](../docs/validation-multijoueur.md).
-L'évolution autoritaire reste une [proposition distincte](../docs/multijoueur-autoritaire.md).
+Le protocole autoritaire expérimental 2 est activé séparément avec `AUTHORITATIVE=1`
+et `?autoritaire=1` dans le navigateur. Voir [AUTORITAIRE.md](AUTORITAIRE.md).
+La présente page décrit le relais historique, toujours sélectionné par défaut.
 
 Deux ordres ne viennent que du **serveur** (il les refuse s'ils viennent d'un navigateur) :
 

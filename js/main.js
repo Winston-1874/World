@@ -730,6 +730,7 @@ const UI = {
     const s = m.settings || {};
     this.launch({
       online: true, seed: m.seed, humans: m.players, me: m.me,
+      authoritativeState: m.state,
       mapType: CONFIG.NET.MAPS.includes(s.mapType) ? s.mapType : 'normal',
       mapSize: ['petit', 'moyen', 'grand'].includes(s.mapSize) ? s.mapSize : 'moyen',
       difficulty: DIFFICULTIES[s.difficulty] ? s.difficulty : 'normal',
@@ -756,7 +757,8 @@ const UI = {
     this.victory = null;
     this.dropAllianceRequests(true);
     Music.start(); // (🎵 la musique d'ambiance démarre avec la partie : le clic sur « Commencer » l'autorise)
-    Game.init(opts);
+    if (opts.authoritativeState) Etat.installer(Game, opts.authoritativeState, opts.me);
+    else Game.init(opts);
     this.centeredOnline = this.startedOnline = false;
     $('kBanner').src = BANNERS[this.banner].icon;
     $('speedBtn').textContent = '⏩ x1'; // (chaque partie commence à vitesse normale)
@@ -1037,7 +1039,9 @@ const UI = {
     $('netLeave').addEventListener('click', () => Net.leaveRoom());
     const copy = $('netCopy');
     if (copy) copy.addEventListener('click', () => {
-      const link = location.origin + location.pathname + '?salon=' + encodeURIComponent(r.code) + (new URLSearchParams(location.search).get('serveur') ? '&serveur=' + encodeURIComponent(new URLSearchParams(location.search).get('serveur')) : '');
+      const link = location.origin + location.pathname + '?salon=' + encodeURIComponent(r.code) +
+        (r.protocol === 2 ? '&autoritaire=1' : '') +
+        (new URLSearchParams(location.search).get('serveur') ? '&serveur=' + encodeURIComponent(new URLSearchParams(location.search).get('serveur')) : '');
       const done = () => this.netStatus(tr('🔗 Lien copié : envoie-le à tes amis !', '🔗 Link copied: send it to your friends!'));
       if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, () => this.netStatus(link));
       else this.netStatus(link);

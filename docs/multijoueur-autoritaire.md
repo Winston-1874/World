@@ -1,6 +1,7 @@
 # Multijoueur autoritaire — proposition du 14 novembre 2026
 
-Statut : proposition à examiner, pas une architecture déjà approuvée.
+Statut : architecture validée le 14 novembre 2026 (« OK go proto avance »).
+Réalisation autorisée des étapes 2 et 3 ; aucun déploiement ni fusion automatique.
 
 ## But
 
@@ -13,8 +14,7 @@ reste utilisable par double-clic sur `index.html`, avec les mêmes règles et bo
 1. Consolider le lockstep actuel : faible changement, mais chaque navigateur
    continue de calculer la partie ; le rattrapage et les divergences subsistent.
 2. Simulation autoritaire isolée par partie : coût serveur supérieur, mais une
-   seule vérité et des clients qui reçoivent l'état. Proposition retenue pour
-   discussion, conforme à la direction hybride demandée.
+   seule vérité et des clients qui reçoivent l'état. Architecture retenue et validée.
 3. Réécrire le moteur dans un autre langage : deux implémentations à maintenir,
    risque de règles divergentes ; écarté.
 

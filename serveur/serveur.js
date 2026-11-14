@@ -22,6 +22,8 @@ const { isUtf8 } = require('node:buffer');
 // --- Réglages ---
 const PORT = limite('PORT', 8080, 0, 65535); // 0 : port libre choisi par le système, utile pour les tests
 const HOST = process.env.HOST || '127.0.0.1';
+const AUTORITAIRE = process.env.AUTHORITATIVE === '1';
+let autoritaire = null;
 const ROOT = path.join(__dirname, '..'); // (les fichiers du jeu : le dossier au-dessus de serveur/)
 const PROTOCOL = 1;                       // (doit être le même que CONFIG.NET.PROTOCOL dans js/config.js)
 const TPS = 10;                           // tours par seconde à vitesse x1 (CONFIG.TICKS_PER_SECOND)
@@ -65,6 +67,10 @@ const TYPES = {
   '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf',
 };
 const server = http.createServer((req, res) => {
+  if (AUTORITAIRE && req.url === '/metrics') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(autoritaire.metrics()));
+  }
   let url;
   try { url = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400); return res.end(); }
   if (url === '/') url = '/index.html';
@@ -183,7 +189,8 @@ function dropConn(conn) {
   if (!conns.has(conn)) return;
   conns.delete(conn);
   conn.buf = Buffer.alloc(0); conn.parts = []; conn.partBytes = 0;
-  leaveRoom(conn);
+  if (AUTORITAIRE) autoritaire.drop(conn);
+  else leaveRoom(conn);
   if (!conn.socket.destroyed) conn.socket.destroy();
 }
 // (toutes les 30 s, on vérifie que chacun est encore là : un navigateur répond toujours à un « ping »)
@@ -358,6 +365,7 @@ function askPause(room, conn, on) {
 // Toutes les 10 ms, chaque partie envoie les tours qui sont dus : TPS par seconde, fois la vitesse
 // (le choix des places se fait toujours à vitesse x1)
 setInterval(() => {
+  if (AUTORITAIRE) return;
   const now = Date.now();
   for (const room of rooms.values()) {
     const g = room.game;
@@ -390,41 +398,10 @@ setInterval(() => {
 // ============================================================================================================
 // Validation de forme seulement : le relais ne connaît ni les terres ni les ressources.
 // Les règles partagées vérifient encore la légalité de l'action dans chaque navigateur.
-function validOrder(o) {
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
-  const entier = (v, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && v >= min && v <= max;
-  const caseCarte = v => entier(v, 0, 999999); // plus grande carte multijoueur : Europe, 1000 × 1000
-  const royaume = v => entier(v, 0, 45); // 16 humains et au plus 30 bots
-  const montant = v => Number.isFinite(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER;
-  const optionCase = v => v === undefined || v === -1 || caseCarte(v);
-  switch (o.k) {
-    case 'spawn': case 'crossing': case 'bridge': return caseCarte(o.i);
-    case 'build': return caseCarte(o.i) && entier(o.type, 1, 8);
-    case 'upgrade': case 'cancelWorks': case 'fortify': case 'demolish': case 'repatriate':
-    case 'abandon': case 'crusade': case 'levy': return caseCarte(o.a);
-    case 'attack': return (o.target === -1 || royaume(o.target)) && montant(o.troops) && optionCase(o.aim) && optionCase(o.src);
-    case 'defend': return entier(o.attack) && montant(o.troops);
-    case 'cancelAttack': case 'recallDefense': return entier(o.attack);
-    case 'recall': return entier(o.id);
-    case 'link': return caseCarte(o.c) && montant(o.troops);
-    case 'expedition': case 'viking': return caseCarte(o.i) && montant(o.troops);
-    case 'reinforce': return caseCarte(o.a) && montant(o.troops);
-    case 'buyViking': return true;
-    case 'relic': return entier(o.id) && montant(o.troops);
-    case 'relicChase': case 'relicReinforce': return entier(o.run) && montant(o.troops);
-    case 'relicRecall': return entier(o.run);
-    case 'wall': return caseCarte(o.c) && caseCarte(o.i) && optionCase(o.from);
-    case 'trade': return caseCarte(o.a) && caseCarte(o.i);
-    case 'ally': return royaume(o.to);
-    case 'allyAnswer': return royaume(o.from) && typeof o.yes === 'boolean';
-    case 'betray': return royaume(o.other);
-    case 'troops': return royaume(o.to) && montant(o.n);
-    case 'gold': return royaume(o.to) && montant(o.g);
-    default: return false; // ordres internes et scénarios solo exclus
-  }
-}
+const { validOrder } = require('./ordres.cjs');
 
 function onMessage(conn, m) {
+  if (AUTORITAIRE) return autoritaire.onMessage(conn, m);
   if (m.t === 'hello') {
     if (m.protocol !== PROTOCOL) { send(conn, { t: 'error', code: 'protocol' }); return closeConn(conn); }
     conn.hello = true;
@@ -494,8 +471,9 @@ function onMessage(conn, m) {
   }
 }
 
-openPublicRoom();
+if (AUTORITAIRE) autoritaire = require('./autoritaire.cjs').creerAutoritaire({ send, sendFrame, closeConn, cleanSettings, limite, cartes: PUBLIC_MAPS, royaumesPublics: PUBLIC_KINGDOMS });
+else openPublicRoom();
 server.listen(PORT, HOST, () => {
   const port = server.address().port;
-  console.log(`🏰 Medieval Emperor : http://${HOST}:${port}  (jeu en ligne sur ws://${HOST}:${port}/ws)`);
+  console.log(`🏰 Medieval Emperor : http://${HOST}:${port}/${AUTORITAIRE ? '?autoritaire=1' : ''}  (jeu en ligne sur ws://${HOST}:${port}/ws)`);
 });

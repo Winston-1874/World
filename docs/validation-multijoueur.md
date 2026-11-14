@@ -1,5 +1,8 @@
 # Socle multijoueur — validation du 14 novembre 2026
 
+Rapport historique du commit `f371225`. Le prototype livré ensuite et sa recette
+sont décrits dans [validation-autoritaire.md](validation-autoritaire.md).
+
 Base : `90c922df022206c362835019042f0046ac580373`. Aucun fichier de règles,
 d'IA, de carte, de rendu ni de client réseau n'est modifié dans ce lot.
 Le serveur est toujours un relais lockstep, sans reconnexion ni simulation autoritaire.

@@ -4,6 +4,7 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const charger = require('node:module').createRequire(path.resolve(__dirname, '../serveur/serveur.js'));
 
 // Exécuter le vrai relais sans ouvrir de port ni lancer de minuterie.
 function relais(env = {}) {
@@ -11,7 +12,7 @@ function relais(env = {}) {
   serveur.listen = (...args) => { serveur.ecoute = args; };
   const timers = [];
   const contexte = vm.createContext({
-    require: nom => nom === 'http' ? { createServer: () => serveur } : require(nom),
+    require: nom => nom === 'http' ? { createServer: () => serveur } : charger(nom),
     __dirname: path.resolve(__dirname, '../serveur'), Buffer, URL,
     process: { env }, console: { log() {}, error() {} },
     setInterval: fn => timers.push(fn),

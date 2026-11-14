@@ -1,0 +1,83 @@
+{
+  "chromium": "156.0.8078.79",
+  "etats": [
+    {
+      "seq": 56,
+      "hash": "67d31751ae1f501d4301a62e8be037a9c65b5cbd3a33e7b25dbc9c80be9f0ed3",
+      "tick": 83,
+      "appels": {
+        "init": 0,
+        "update": 0,
+        "runOrder": 0
+      },
+      "metrics": {
+        "states": 54,
+        "bytes": 270058,
+        "decodeMs": 4305.399999141693,
+        "resumes": 0
+      }
+    },
+    {
+      "seq": 56,
+      "hash": "67d31751ae1f501d4301a62e8be037a9c65b5cbd3a33e7b25dbc9c80be9f0ed3",
+      "tick": 83,
+      "appels": {
+        "init": 0,
+        "update": 0,
+        "runOrder": 0
+      },
+      "metrics": {
+        "states": 48,
+        "bytes": 290319,
+        "decodeMs": 4038.800000667572,
+        "resumes": 1
+      }
+    }
+  ],
+  "serveur": {
+    "protocol": 2,
+    "active": 1,
+    "rooms": 2,
+    "bytesEnvoyes": 649941,
+    "transmissions": 139,
+    "diffusionsMs": 17.510484999989785,
+    "superviseur": {
+      "rss": 80216064,
+      "rssMax": 80936960,
+      "cpuMs": 1004.268
+    },
+    "parties": [
+      {
+        "initMs": 1085.257768,
+        "ticks": 83,
+        "simMs": 303.19997699999385,
+        "simMax": 72.24949799999922,
+        "serialMs": 1658.1881950000031,
+        "publications": 74,
+        "rss": 104771584,
+        "cpuMs": 4298.171,
+        "retardMs": 66.88418200000001,
+        "boucleMaxMs": 78.00218000000041,
+        "rssMax": 108617728,
+        "rawBytes": 920126,
+        "fullBytes": 42249,
+        "deltaBytes": 2562
+      }
+    ]
+  },
+  "erreurs": [],
+  "verifications": [
+    "deux navigateurs",
+    "FR/EN",
+    "lien d’invitation",
+    "alliance",
+    "don",
+    "attaque",
+    "gel/reprise",
+    "déconnexion/reconnexion",
+    "base perdue/résynchronisation",
+    "état exact",
+    "zéro simulation client",
+    "solo file://"
+  ]
+}

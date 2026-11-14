@@ -12,9 +12,11 @@ bâtis moulins, casernes et châteaux, et écrase les royaumes rivaux pour domin
 > Le jeu en ligne est mis à jour automatiquement à chaque nouveauté.
 > Tu peux aussi télécharger le projet et ouvrir `index.html` d'un double-clic.
 
-Ce fork prépare l'évolution du multijoueur : le relais dispose de limites de ressources et d'un banc de tests.
-La simulation reste dans les navigateurs. Voir les [mesures](docs/validation-multijoueur.md) et la
-[proposition de serveur autoritaire](docs/multijoueur-autoritaire.md), encore à valider.
+Ce fork propose un **prototype multijoueur autoritaire** : le serveur calcule la partie et les bots,
+les navigateurs affichent les états reçus et peuvent reprendre après une coupure.
+Il s'active explicitement ; le solo par double-clic reste disponible.
+Voir le [guide du prototype et ses limites](serveur/AUTORITAIRE.md), la
+[recette et les mesures](docs/validation-autoritaire.md). Aucun déploiement de ce prototype sur le site public.
 
 ---
 
@@ -41,6 +43,12 @@ La simulation reste dans les navigateurs. Voir les [mesures](docs/validation-mul
 - 🌍 **En anglais ou en français** : le jeu est en anglais par défaut ; la liste « Langue » en haut à droite du menu le passe en français (le choix est gardé)
 
 ## 🕹️ Comment jouer
+
+**Essayer le prototype multijoueur en local** : avec Node 24, lancer
+`AUTHORITATIVE=1 node serveur/serveur.js`, puis ouvrir
+[http://localhost:8080/?autoritaire=1](http://localhost:8080/?autoritaire=1).
+Créer un salon privé, rejoindre son code depuis un autre navigateur, puis lancer la partie.
+Le même serveur sans `AUTHORITATIVE=1` conserve le relais historique.
 
 1. **Fonde ta capitale** : choisis d'abord la **langue** du jeu en haut à droite du menu (🇬🇧 English, par défaut, ou 🇫🇷 Français : la page se recharge dans la nouvelle langue, en gardant les réglages déjà choisis au menu, et le choix est gardé pour les prochaines fois), puis ta bannière (clique sur le drapeau affiché pour ouvrir la liste de tous les drapeaux, chacun avec son nom dessous : la faction dans un scénario, ou ce qu'il représente dans une partie libre), le **type de carte**, la **difficulté** (Facile, Normale, Difficile, 💀 Extrême : les bots y sont de plus en plus avantagés) et le
    **nombre de royaumes rivaux** (de 3 à 20, autant que de drapeaux disponibles ; au plus un rival pour 5 000 cases de carte : 10 sur la petite carte, réglage `CELLS_PER_OPPONENT`) dans le menu. ⏩ **Vitesse de la partie** : en jeu, le bouton ⏩ en haut (à côté de
@@ -1362,6 +1370,11 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 
 ## 🆕 Nouveautés
 
+- **Fork — prototype autoritaire (14/11/2026)** : simulation et bots isolés dans un processus par partie,
+  états complets/différentiels, reprise du même royaume après une coupure pendant 60 secondes,
+  contrôles de ressources. Recette avec deux Chromium réels et charge avec seize joueurs et quatre bots.
+  Activation volontaire ; [limites de cette version](serveur/AUTORITAIRE.md#limites-du-prototype).
+
 - **Fork — socle multijoueur (14/11/2026)** : limites de connexions, salons, fragments et files de sortie ;
   validation de forme des ordres ; rejoindre un salon inaccessible ne fait plus quitter le salon actuel.
   Tests du moteur partagé et mesures reproductibles, sans modification des règles ni du solo.
@@ -1886,8 +1899,8 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 
 ## 💡 Idées pour la suite
 
-- **Dans ce fork, proposition à valider** : simulation multijoueur autoritaire isolée par partie,
-  transmission d'état et reconnexion ; [conception détaillée](docs/multijoueur-autoritaire.md).
+- **Dans ce fork, prochaines étapes** : compléter les notifications automatiques du mode autoritaire,
+  mesurer les grandes cartes sur un hébergement borné et tester Firefox/Safari et les réseaux dégradés.
 
 - 🤝 Plus de diplomatie : demandes d'aide aux membres du pacte
 - 🗼 Activer la tour de garde dans les parties (le bâtiment est prêt : `TOWERS` dans `js/config.js`)
