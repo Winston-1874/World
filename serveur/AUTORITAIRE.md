@@ -14,6 +14,47 @@ public n'est configuré par ce projet. Le serveur et les deux navigateurs doiven
 tous choisir la version 2. Sans ces options, le relais historique reste disponible.
 Le solo utilise toujours les mêmes scripts par double-clic sur `index.html`.
 
+## Écoute sur socket Unix
+
+`SOCKET_PATH` remplace l'écoute TCP pour un proxy local. Sans cette variable,
+`HOST` et `PORT` gardent leur comportement. Exemple, après préparation du
+répertoire par l'opérateur :
+
+```sh
+umask 0007
+SOCKET_PATH=/run/world/http.sock AUTHORITATIVE=1 node serveur/serveur.js
+```
+
+Cette option est réservée à Unix : chemin absolu explicite, non vide, sans NUL,
+limité à 103 octets pour rester compatible avec les limites de chemins Unix.
+Le serveur ne crée pas le répertoire et ne modifie pas ses permissions. Il
+refuse tout chemin existant, y compris socket actif, fichier, répertoire ou lien
+cassé ; aucune suppression automatique. Une erreur de vérification ou de liaison
+est signalée avec `SOCKET_PATH` et termine le démarrage avec le code 1.
+
+Le répertoire doit appartenir à l'utilisateur du serveur, qui doit pouvoir y
+créer le socket. Par exemple, répertoire **0750**, propriétaire serveur et groupe
+partagé avec le proxy ; `umask 0007` produit un socket **0770**. Le proxy doit
+pouvoir traverser les répertoires parents et se connecter au socket (droit
+d'écriture sur celui-ci sous Linux). Il n'a pas besoin de pouvoir supprimer les
+entrées du répertoire. Adapter UID/GID aux utilisateurs réellement configurés ;
+ne pas ouvrir le répertoire ou le socket à tous les utilisateurs.
+
+Pour un conteneur sans réseau, le proxy et le serveur partagent le **répertoire**
+du socket via un volume, plutôt qu'un montage du fichier socket qui figerait son
+inode. Le proxy transmet HTTP et l'upgrade WebSocket `/ws` au même socket ; les
+navigateurs utilisent son URL HTTP(S) normale avec `?autoritaire=1`. Aucun port
+TCP n'est ouvert par le serveur en mode socket. Cette option ne configure pas
+Docker, le proxy, TLS ni le réseau de l'hôte.
+
+Un arrêt par signal ou un plantage peut laisser le socket sur disque. Avant
+de le retirer, l'opérateur doit confirmer l'arrêt de l'ancien processus ou
+conteneur, puis vérifier le type et le propriétaire du chemin exact. Un refus
+de connexion ne prouve pas à lui seul que le socket est abandonné (permissions,
+espace de noms). Ne jamais effacer un fichier ordinaire à cet emplacement, ni
+ajouter un nettoyage aveugle au démarrage. Les répertoires temporaires du test
+`node --test tests/socket-unix.test.cjs` sont supprimés après arrêt de ses enfants.
+
 ## Exécution et état
 
 Le superviseur conserve les salons et les connexions. Il lance `partie.cjs` dans

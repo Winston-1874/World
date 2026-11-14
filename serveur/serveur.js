@@ -22,6 +22,18 @@ const { isUtf8 } = require('node:buffer');
 // --- Réglages ---
 const PORT = limite('PORT', 8080, 0, 65535); // 0 : port libre choisi par le système, utile pour les tests
 const HOST = process.env.HOST || '127.0.0.1';
+const SOCKET_PATH = process.env.SOCKET_PATH;
+function erreurSocket(message) {
+  console.error(`SOCKET_PATH : ${message}`);
+  process.exit(1);
+}
+if (SOCKET_PATH !== undefined) {
+  if (process.platform === 'win32' || !path.isAbsolute(SOCKET_PATH) || SOCKET_PATH.includes('\0') ||
+      Buffer.byteLength(SOCKET_PATH) > 103) erreurSocket('chemin Unix absolu requis, limité à 103 octets');
+  // Refuser aussi les fichiers, répertoires et liens cassés. Ne jamais nettoyer à l'aveugle.
+  try { fs.lstatSync(SOCKET_PATH); erreurSocket('chemin existant, aucun remplacement automatique'); }
+  catch (e) { if (e.code !== 'ENOENT') erreurSocket(`vérification impossible (${e.code || 'erreur'})`); }
+}
 const AUTORITAIRE = process.env.AUTHORITATIVE === '1';
 let autoritaire = null;
 const ROOT = path.join(__dirname, '..'); // (les fichiers du jeu : le dossier au-dessus de serveur/)
@@ -473,7 +485,13 @@ function onMessage(conn, m) {
 
 if (AUTORITAIRE) autoritaire = require('./autoritaire.cjs').creerAutoritaire({ send, sendFrame, closeConn, cleanSettings, limite, cartes: PUBLIC_MAPS, royaumesPublics: PUBLIC_KINGDOMS });
 else openPublicRoom();
-server.listen(PORT, HOST, () => {
-  const port = server.address().port;
-  console.log(`🏰 Medieval Emperor : http://${HOST}:${port}/${AUTORITAIRE ? '?autoritaire=1' : ''}  (jeu en ligne sur ws://${HOST}:${port}/ws)`);
-});
+if (SOCKET_PATH !== undefined) {
+  // listen refuse encore EADDRINUSE si le chemin apparaît après notre vérification.
+  server.once('error', e => erreurSocket(`écoute impossible (${e.code || 'erreur'})`));
+  server.listen(SOCKET_PATH, () => console.log(`Socket Unix prêt : ${SOCKET_PATH} (HTTP et WebSocket /ws)`));
+} else {
+  server.listen(PORT, HOST, () => {
+    const port = server.address().port;
+    console.log(`🏰 Medieval Emperor : http://${HOST}:${port}/${AUTORITAIRE ? '?autoritaire=1' : ''}  (jeu en ligne sur ws://${HOST}:${port}/ws)`);
+  });
+}

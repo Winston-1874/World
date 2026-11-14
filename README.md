@@ -1370,6 +1370,10 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 
 ## 🆕 Nouveautés
 
+- **Fork — écoute Unix (14/11/2026)** : option `SOCKET_PATH` pour placer HTTP et
+  WebSocket derrière un proxy local sans écoute TCP. Les chemins existants sont
+  refusés ; [droits et nettoyage documentés](serveur/AUTORITAIRE.md#écoute-sur-socket-unix).
+
 - **Fork — publication allégée (14/11/2026)** : l'état complet est préparé au démarrage
   puis à la demande d'une reprise ; les joueurs à jour reçoivent les différentiels.
   Les reprises simultanées partagent un seul complet. [Comparaison mesurée](docs/optimisation-publication.md).

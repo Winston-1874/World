@@ -28,6 +28,9 @@ puis ouvrir **http://localhost:8080** : le serveur envoie aussi les fichiers du 
 - Un autre port : `PORT=3000 node serveur/serveur.js`
 - Le serveur écoute uniquement sur `127.0.0.1` par défaut. Pour une autre interface, définir explicitement `HOST`.
   `PORT=0` demande un port libre au système (affiché au démarrage), notamment pour les tests.
+- `SOCKET_PATH=/chemin/absolu/http.sock` sélectionne une écoute Unix à la place
+  de TCP, pour HTTP et WebSocket. Le chemin doit être absent ; aucun effacement
+  automatique. Voir [permissions et nettoyage](AUTORITAIRE.md#écoute-sur-socket-unix).
 - Une partie publique plus souvent (pour essayer) : `PUBLIC_SECONDS=20 node serveur/serveur.js`
 - Les autres règles (nombre de royaumes de la partie publique, temps pour choisir sa place, durée des pauses…) sont en
   haut de `serveur.js`.
