@@ -15,7 +15,8 @@ Les scénarios (Factions, Charlemagne, guerre de Cent Ans) et les cartes dessin�
 
 ## Lancer le serveur
 
-Il faut juste [Node.js](https://nodejs.org) (version 18 ou plus), sans rien installer d'autre :
+Il faut juste [Node.js LTS](https://nodejs.org/en/about/previous-releases) (22, 24 ou 26), sans rien installer d'autre.
+Le banc de tests et les mesures de ce fork sont exécutés avec Node 24.21.0 :
 
 ```
 node serveur/serveur.js
@@ -25,9 +26,32 @@ puis ouvrir **http://localhost:8080** : le serveur envoie aussi les fichiers du 
 « 🌐 Jouer en ligne » apparaissent dans le menu.
 
 - Un autre port : `PORT=3000 node serveur/serveur.js`
+- Le serveur écoute uniquement sur `127.0.0.1` par défaut. Pour une autre interface, définir explicitement `HOST`.
+  `PORT=0` demande un port libre au système (affiché au démarrage), notamment pour les tests.
 - Une partie publique plus souvent (pour essayer) : `PUBLIC_SECONDS=20 node serveur/serveur.js`
 - Les autres règles (nombre de royaumes de la partie publique, temps pour choisir sa place, durée des pauses…) sont en
   haut de `serveur.js`.
+
+### Ressources du relais
+
+| Variable | Défaut | Rôle |
+|---|---:|---|
+| `MAX_CONNECTIONS` | 128 | Connexions WebSocket simultanées ; les suivantes reçoivent HTTP 503 |
+| `MAX_ROOMS` | 32 | Salons et parties en cours, prochain salon public compris ; minimum 2 |
+| `MAX_MESSAGE_BYTES` | 16384 | Octets cumulés d'un message, fragments compris |
+| `MAX_PENDING_BYTES` | 262144 | Octets de sortie en attente par connexion, nouvelle trame comprise |
+
+Une limite invalide fait échouer le démarrage. Un client trop lent est déconnecté ; les autres continuent.
+Au plus 128 fragments par message, 256 trames par seconde et par connexion, et 20 ordres par joueur et par tour.
+Un message incomplet expire après 30 à 60 secondes (contrôle toutes les 30 secondes).
+La réception tamponne au plus `MAX_MESSAGE_BYTES + 65536` octets avant de refuser la connexion.
+Le plafond de 16 humains par partie est conservé. À capacité maximale, une création de salon reçoit `full` et
+le départ public est reporté d'un cycle, pour conserver la place du prochain salon public.
+
+Ce sont des bornes applicatives, pas une protection complète d'un service public : la terminaison TLS,
+les limites HTTP et par adresse et les contrôles d'origine restent à traiter avant une exposition publique.
+Le protocole accepte du texte UTF-8 et des trames de contrôle ; le binaire et les extensions sont refusés.
+Référence de la fragmentation : [RFC 6455, sections 5.2 à 5.5](https://www.rfc-editor.org/rfc/rfc6455).
 
 **Jouer depuis GitHub Pages** avec un serveur ailleurs : mettre son adresse dans `CONFIG.NET.SERVER`
 (`js/config.js`), par exemple `'wss://mon-serveur.fr/ws'`, ou pour essayer sans toucher au code :
@@ -93,6 +117,15 @@ Des messages **JSON** sur une WebSocket, à l'adresse `/ws`. Chacun a un champ `
 Un ordre est un objet `{ k: 'sorte', … }` ; la liste complète est dans `Game.runOrder` (`js/game.js`). Par exemple :
 `{ k: 'attack', target, troops, aim, src }`, `{ k: 'build', i, type }`, `{ k: 'upgrade', a }`,
 `{ k: 'defend', attack, troops }`, `{ k: 'ally', to }`, `{ k: 'allyAnswer', from, yes }`, `{ k: 'spawn', i }`…
+
+Le relais filtre désormais leur **forme** (`validOrder`) : sorte connue pour le multijoueur, indices entiers,
+montants numériques finis positifs ou nuls, réponses booléennes. Les ordres solo sont exclus. Le numéro `s`
+est un entier de 0 à 2147483647. Les actions mal formées sont ignorées ; les règles du navigateur vérifient
+toujours les ressources, l'appartenance des cases et les cibles. Ce contrôle n'en fait pas un serveur autoritaire.
+Les empreintes doivent concerner les 2000 derniers tours déjà émis et être des entiers non signés de 32 bits.
+
+Les tests et les mesures se trouvent dans [`docs/validation-multijoueur.md`](../docs/validation-multijoueur.md).
+L'évolution autoritaire reste une [proposition distincte](../docs/multijoueur-autoritaire.md).
 
 Deux ordres ne viennent que du **serveur** (il les refuse s'ils viennent d'un navigateur) :
 

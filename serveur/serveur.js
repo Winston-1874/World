@@ -1,6 +1,6 @@
 // 🌐 SERVEUR DE JEU DE MEDIEVAL EMPEROR (serveur de référence)
 //
-// Un petit serveur, sans aucune dépendance (juste Node.js, version 18 ou plus) :
+// Un petit serveur, sans aucune dépendance (Node.js 22, 24 ou 26 LTS) :
 //  - il envoie les fichiers du jeu (index.html, js/, img/, sons/…) : le jeu s'ouvre sur http://localhost:8080 ;
 //  - il fait jouer les parties en ligne, par WebSocket sur /ws (voir PROTOCOLE.md) : la partie publique, qui part
 //    toutes les 2 minutes avec tous ceux qui attendent, et les salons privés (avec un code, l'hôte choisit les réglages).
@@ -17,9 +17,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { isUtf8 } = require('node:buffer');
 
 // --- Réglages ---
-const PORT = +process.env.PORT || 8080;
+const PORT = limite('PORT', 8080, 0, 65535); // 0 : port libre choisi par le système, utile pour les tests
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.join(__dirname, '..'); // (les fichiers du jeu : le dossier au-dessus de serveur/)
 const PROTOCOL = 1;                       // (doit être le même que CONFIG.NET.PROTOCOL dans js/config.js)
 const TPS = 10;                           // tours par seconde à vitesse x1 (CONFIG.TICKS_PER_SECOND)
@@ -32,6 +34,18 @@ const LOOK_TIME = 10;                     // placement aléatoire : secondes pou
 const PAUSE_TIME = 15 * 1000;             // salon privé : un joueur (pas l'hôte) met en pause 15 s au plus…
 const PAUSE_EVERY = 5 * 60 * 1000;        // … une fois toutes les 5 minutes
 const HASH_KEEP = 2000;                   // tours pendant lesquels on garde les empreintes reçues (pour les comparer)
+// Bornes du relais ; une valeur invalide est une erreur de configuration, pas une limite désactivée.
+function limite(nom, defaut, min = 1, max = 1 << 24) {
+  const n = process.env[nom] === undefined ? defaut : Number(process.env[nom]);
+  if (!Number.isSafeInteger(n) || n < min || n > max) throw new Error(`Réglage invalide : ${nom}`);
+  return n;
+}
+const MAX_CONNECTIONS = limite('MAX_CONNECTIONS', 128, 1, 4096);
+const MAX_ROOMS = limite('MAX_ROOMS', 32, 2, 4096); // comprend le prochain salon public
+const MAX_MESSAGE_BYTES = limite('MAX_MESSAGE_BYTES', 16384, 1024, 1 << 20);
+const MAX_PENDING_BYTES = limite('MAX_PENDING_BYTES', 262144, 1024, 1 << 24);
+const MAX_FRAGMENTS = 128;
+const MAX_FRAMES_SECOND = 256;
 // (CONFIG.NET.MAPS : les cartes aléatoires, les 16 cartes arène, et les cartes prédéfinies)
 const MAPS = ['normal', 'continental', 'naval', 'couronne', 'cratere', 'carrefour', 'archipel', 'rives', 'labyrinthe', 'oasis',
   'plateaux', 'ponts', 'saints', 'merinterieure', 'montagne', 'nord', 'melee', 'gloire', 'trois', 'world', 'europe', 'azeroth'];
@@ -70,22 +84,40 @@ const server = http.createServer((req, res) => {
 // ============================================================================================================
 let nextConnId = 1;
 const conns = new Set();
-server.on('upgrade', (req, socket) => {
-  if (new URL(req.url, 'http://x').pathname !== '/ws' || (req.headers.upgrade || '').toLowerCase() !== 'websocket' || !req.headers['sec-websocket-key']) {
+server.on('upgrade', (req, socket, head) => {
+  let pathname;
+  try { pathname = new URL(req.url, 'http://x').pathname; } catch { socket.destroy(); return; }
+  const key = req.headers['sec-websocket-key'];
+  if (pathname !== '/ws' || (req.headers.upgrade || '').toLowerCase() !== 'websocket' ||
+      req.headers['sec-websocket-version'] !== '13' || typeof key !== 'string' ||
+      !/^[A-Za-z0-9+/]{22}==$/.test(key) || Buffer.from(key, 'base64').length !== 16 ||
+      !(req.headers.connection || '').toLowerCase().split(/\s*,\s*/).includes('upgrade')) {
     socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     return;
   }
+  if (conns.size >= MAX_CONNECTIONS) { socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; }
   // (la poignée de main : on prouve au navigateur qu'on parle WebSocket)
   const accept = crypto.createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`);
   socket.setNoDelay(true);
-  const conn = { id: nextConnId++, socket, buf: Buffer.alloc(0), parts: [], alive: true, hello: false,
+  const conn = { id: nextConnId++, socket, buf: Buffer.alloc(0), parts: [], partBytes: 0, fragmenting: false,
+    frameWindow: Date.now(), frames: 0, incompleteSince: 0, alive: true, hello: false,
     name: 'Royaume', banner: 0, room: null };
   conns.add(conn);
-  socket.on('data', data => { conn.buf = Buffer.concat([conn.buf, data]); readFrames(conn); });
+  const receive = data => {
+    if (!conns.has(conn)) return;
+    // Une seule trame incomplète et au plus un bloc TCP en attente ; pas d'accumulation sans borne.
+    if (conn.buf.length + data.length > MAX_MESSAGE_BYTES + 65536) return closeConn(conn);
+    conn.buf = Buffer.concat([conn.buf, data]);
+    readFrames(conn);
+    if (conn.buf.length || conn.fragmenting) conn.incompleteSince ||= Date.now();
+    else conn.incompleteSince = 0;
+  };
+  socket.on('data', receive);
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
+  if (head && head.length) receive(head);
 });
 
 // Lit les « trames » WebSocket reçues (un message peut arriver en plusieurs morceaux, ou plusieurs d'un coup)
@@ -94,12 +126,18 @@ function readFrames(conn) {
     const b = conn.buf;
     if (b.length < 2) return;
     const fin = b[0] & 0x80, op = b[0] & 0x0f, masked = b[1] & 0x80;
+    if ((b[0] & 0x70) || ![0, 1, 8, 9, 10].includes(op)) return closeConn(conn);
     let len = b[1] & 0x7f, at = 2;
     if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); at = 4; }
     else if (len === 127) { if (b.length < 10) return; len = Number(b.readBigUInt64BE(2)); at = 10; }
-    if (len > 1 << 20) return closeConn(conn); // (un message de plus d'1 Mo : ce n'est pas notre jeu)
+    if (!Number.isSafeInteger(len) || len > MAX_MESSAGE_BYTES) return closeConn(conn);
+    if (op >= 8 && (!fin || len > 125 || (op === 8 && len === 1))) return closeConn(conn);
+    if (op < 8 && ((op === 0) !== conn.fragmenting || conn.partBytes + len > MAX_MESSAGE_BYTES)) return closeConn(conn);
     if (!masked) return closeConn(conn);       // (un navigateur masque toujours ses trames)
     if (b.length < at + 4 + len) return;
+    const now = Date.now();
+    if (now - conn.frameWindow >= 1000) { conn.frameWindow = now; conn.frames = 0; }
+    if (++conn.frames > MAX_FRAMES_SECOND) return closeConn(conn);
     const mask = b.subarray(at, at + 4), data = Buffer.from(b.subarray(at + 4, at + 4 + len));
     for (let i = 0; i < data.length; i++) data[i] ^= mask[i & 3];
     conn.buf = b.subarray(at + 4 + len);
@@ -108,12 +146,19 @@ function readFrames(conn) {
     if (op === 0xA) { conn.alive = true; continue; }          // pong
     if (op === 0x1 || op === 0x0) {                           // texte (ou suite d'un message en morceaux)
       conn.parts.push(data);
+      conn.partBytes += data.length;
+      if (conn.parts.length > MAX_FRAGMENTS) return closeConn(conn);
+      conn.fragmenting = !fin;
       if (!fin) continue;
-      const text = Buffer.concat(conn.parts).toString('utf8');
+      const message = Buffer.concat(conn.parts, conn.partBytes);
+      if (!isUtf8(message)) return closeConn(conn);
+      const text = message.toString('utf8');
       conn.parts = [];
+      conn.partBytes = 0;
+      conn.incompleteSince = 0; // le fragment éventuel du message suivant aura son propre délai
       let msg;
       try { msg = JSON.parse(text); } catch (e) { continue; }
-      if (msg && typeof msg === 'object') {
+      if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
         try { onMessage(conn, msg); } catch (e) { console.error('Erreur sur un message :', e); }
       }
     }
@@ -122,6 +167,8 @@ function readFrames(conn) {
 function sendFrame(conn, op, data) {
   if (conn.socket.destroyed) return;
   const n = data.length;
+  // Un client qui ne lit plus ne doit pas retenir indéfiniment les tours en RAM.
+  if (conn.socket.writableLength + n + 10 > MAX_PENDING_BYTES) return dropConn(conn);
   const head = n < 126 ? Buffer.from([0x80 | op, n])
     : n < 65536 ? Buffer.from([0x80 | op, 126, n >> 8, n & 255])
       : Buffer.concat([Buffer.from([0x80 | op, 127]), (() => { const x = Buffer.alloc(8); x.writeBigUInt64BE(BigInt(n)); return x; })()]);
@@ -135,13 +182,14 @@ function closeConn(conn) {
 function dropConn(conn) {
   if (!conns.has(conn)) return;
   conns.delete(conn);
+  conn.buf = Buffer.alloc(0); conn.parts = []; conn.partBytes = 0;
   leaveRoom(conn);
   if (!conn.socket.destroyed) conn.socket.destroy();
 }
 // (toutes les 30 s, on vérifie que chacun est encore là : un navigateur répond toujours à un « ping »)
 setInterval(() => {
   for (const c of conns) {
-    if (!c.alive) { closeConn(c); continue; }
+    if (!c.alive || (c.incompleteSince && Date.now() - c.incompleteSince >= 30000)) { closeConn(c); continue; }
     c.alive = false;
     sendFrame(c, 0x9, Buffer.alloc(0));
   }
@@ -213,9 +261,10 @@ function roomInfo(room, conn) {
 function broadcastRoom(room) { for (const c of room.members) send(c, roomInfo(room, c)); }
 
 function joinRoom(conn, room) {
-  leaveRoom(conn);
+  if (conn.room === room) return;
   if (room.game) return send(conn, { t: 'error', code: 'started' });
   if (room.members.length >= MAX_PLAYERS) return send(conn, { t: 'error', code: 'full' });
+  leaveRoom(conn);
   room.members.push(conn);
   conn.room = room;
   broadcastRoom(room);
@@ -235,6 +284,12 @@ function leaveRoom(conn) {
 
 // --- Lancer une partie ---
 function startGame(room) {
+  // Le salon public suivant doit avoir une place avant de lancer celui-ci.
+  if (room.public && rooms.size >= MAX_ROOMS) {
+    room.startsAt = Date.now() + PUBLIC_EVERY;
+    broadcastRoom(room);
+    return;
+  }
   const humans = room.members.slice();
   if (!humans.length) return;
   const s = room.settings;
@@ -333,6 +388,42 @@ setInterval(() => {
 // ============================================================================================================
 // 4. Les messages des joueurs (voir PROTOCOLE.md)
 // ============================================================================================================
+// Validation de forme seulement : le relais ne connaît ni les terres ni les ressources.
+// Les règles partagées vérifient encore la légalité de l'action dans chaque navigateur.
+function validOrder(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+  const entier = (v, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && v >= min && v <= max;
+  const caseCarte = v => entier(v, 0, 999999); // plus grande carte multijoueur : Europe, 1000 × 1000
+  const royaume = v => entier(v, 0, 45); // 16 humains et au plus 30 bots
+  const montant = v => Number.isFinite(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER;
+  const optionCase = v => v === undefined || v === -1 || caseCarte(v);
+  switch (o.k) {
+    case 'spawn': case 'crossing': case 'bridge': return caseCarte(o.i);
+    case 'build': return caseCarte(o.i) && entier(o.type, 1, 8);
+    case 'upgrade': case 'cancelWorks': case 'fortify': case 'demolish': case 'repatriate':
+    case 'abandon': case 'crusade': case 'levy': return caseCarte(o.a);
+    case 'attack': return (o.target === -1 || royaume(o.target)) && montant(o.troops) && optionCase(o.aim) && optionCase(o.src);
+    case 'defend': return entier(o.attack) && montant(o.troops);
+    case 'cancelAttack': case 'recallDefense': return entier(o.attack);
+    case 'recall': return entier(o.id);
+    case 'link': return caseCarte(o.c) && montant(o.troops);
+    case 'expedition': case 'viking': return caseCarte(o.i) && montant(o.troops);
+    case 'reinforce': return caseCarte(o.a) && montant(o.troops);
+    case 'buyViking': return true;
+    case 'relic': return entier(o.id) && montant(o.troops);
+    case 'relicChase': case 'relicReinforce': return entier(o.run) && montant(o.troops);
+    case 'relicRecall': return entier(o.run);
+    case 'wall': return caseCarte(o.c) && caseCarte(o.i) && optionCase(o.from);
+    case 'trade': return caseCarte(o.a) && caseCarte(o.i);
+    case 'ally': return royaume(o.to);
+    case 'allyAnswer': return royaume(o.from) && typeof o.yes === 'boolean';
+    case 'betray': return royaume(o.other);
+    case 'troops': return royaume(o.to) && montant(o.n);
+    case 'gold': return royaume(o.to) && montant(o.g);
+    default: return false; // ordres internes et scénarios solo exclus
+  }
+}
+
 function onMessage(conn, m) {
   if (m.t === 'hello') {
     if (m.protocol !== PROTOCOL) { send(conn, { t: 'error', code: 'protocol' }); return closeConn(conn); }
@@ -346,6 +437,7 @@ function onMessage(conn, m) {
   switch (m.t) {
     case 'public': return joinRoom(conn, publicRoom);
     case 'create': {
+      if (rooms.size >= MAX_ROOMS) return send(conn, { t: 'error', code: 'full' });
       const r = { code: newCode(), public: false, host: conn.id, members: [], game: null, settings: cleanSettings(m.settings) };
       rooms.set(r.code, r);
       return joinRoom(conn, r);
@@ -373,8 +465,7 @@ function onMessage(conn, m) {
     case 'order': {
       if (!g) return;
       const slot = g.slots.indexOf(conn), o = m.o;
-      if (slot < 0 || !o || typeof o !== 'object' || typeof o.k !== 'string') return;
-      if (['leave', 'begin'].includes(o.k)) return; // (ces ordres-là, seul le serveur les donne)
+      if (slot < 0 || !validOrder(o) || !Number.isSafeInteger(m.s) || m.s < 0 || m.s > 2147483647) return;
       if (JSON.stringify(o).length > 2000) return;
       if (g.queue.filter(q => q[0] === slot).length >= 20) return; // (pas plus de 20 ordres par tour et par joueur)
       g.queue.push([slot, o, m.s | 0]);
@@ -388,20 +479,23 @@ function onMessage(conn, m) {
     case 'hash': {
       // (chaque joueur envoie l'empreinte de sa partie de temps en temps : elles doivent toutes être identiques)
       if (!g || g.desync) return;
-      const n = m.n | 0, h = m.h;
+      const n = m.n, h = m.h;
+      if (!Number.isSafeInteger(n) || n < Math.max(0, g.turn - HASH_KEEP) || n > g.turn ||
+          !Number.isInteger(h) || h < 0 || h > 0xffffffff) return;
       if (!g.hashes.has(n)) g.hashes.set(n, h);
       else if (g.hashes.get(n) !== h) {
         g.desync = true;
         console.log(`⚠️ Partie ${room.code} : désynchronisation au tour ${n}`);
         gameSend(g, { t: 'desync', n });
       }
-      for (const k of g.hashes.keys()) if (k < n - HASH_KEEP) g.hashes.delete(k);
+      for (const k of g.hashes.keys()) if (k < g.turn - HASH_KEEP) g.hashes.delete(k);
       return;
     }
   }
 }
 
 openPublicRoom();
-server.listen(PORT, () => {
-  console.log(`🏰 Medieval Emperor : http://localhost:${PORT}  (jeu en ligne sur ws://localhost:${PORT}/ws)`);
+server.listen(PORT, HOST, () => {
+  const port = server.address().port;
+  console.log(`🏰 Medieval Emperor : http://${HOST}:${port}  (jeu en ligne sur ws://${HOST}:${port}/ws)`);
 });
