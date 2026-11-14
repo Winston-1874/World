@@ -13,6 +13,7 @@ const GameRules = {
   paused: false,
 
   init(opts) {
+    this.authoritative = false; // le client autoritaire installe ses états sans appeler init
     this.mapType = opts.mapType || 'normal';
     this.mapSize = opts.mapSize || 'moyen';
     // 🎲 Le hasard de la partie vient d'une « graine » : la même graine donne la même carte et les mêmes tirages
@@ -2946,6 +2947,7 @@ const GameRules = {
   // navigateur l'exécute au même moment, et la partie reste la même partout. Renvoie le résultat de l'action (un
   // message d'erreur, l'assaut lancé…), que l'interface du joueur qui l'a donné peut afficher (voir UI.act).
   runOrder(pid, o) {
+    if (this.authoritative) throw new Error('Le serveur exécute les ordres de cette partie');
     const p = this.players[pid];
     if (!p || !o) return null;
     // (un joueur parti : un bot prend sa place ; parti avant d'avoir choisi sa place, il sera posé au hasard)
@@ -7614,7 +7616,8 @@ const GameRules = {
     // (🌐 en ligne, un humain répond lui-même, plus tard, par un ordre « allyAnswer » ; la demande ne se répète pas
     //  avant ALLIANCE_REFUSAL_COOLDOWN secondes)
     if (judge.human && this.online) {
-      if (judge === this.human) UI.askAlliance(from);
+      if (this.emitEvent) this.emitEvent({ k: 'alliance', from: from.id, to: judge.id });
+      else if (judge === this.human) UI.askAlliance(from);
       from.refusedUntil[judge.id] = this.tick + CONFIG.ALLIANCE_REFUSAL_COOLDOWN * CONFIG.TICKS_PER_SECOND;
       return 'pending';
     }
@@ -7729,6 +7732,7 @@ const GameRules = {
 
   // --- Boucle principale (appelée TICKS_PER_SECOND fois par seconde) ---
   update() {
+    if (this.authoritative) throw new Error('Le serveur fait avancer cette partie');
     if (this.phase !== 'playing' || this.paused) return;
     this.tick++;
     this.inUpdate = true; // (🌐 les règles travaillent : elles peuvent renouveler leurs mémoires, voir uiCall)

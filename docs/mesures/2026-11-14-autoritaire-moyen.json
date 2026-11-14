@@ -1,0 +1,86 @@
+{
+  "node": "v24.21.0",
+  "machine": {
+    "cpu": "Intel Core Processor (Haswell, no TSX)",
+    "coeursLogiques": 6,
+    "ramGo": 11.40948486328125
+  },
+  "scenario": {
+    "carte": "normal",
+    "taille": "moyen",
+    "humains": 16,
+    "bots": 4,
+    "vitesse": 3,
+    "dureeMs": 20001.877142999998,
+    "ordres": 304,
+    "preparationMs": 6155.484735
+  },
+  "resultat": {
+    "etatsIdentiques": true,
+    "hash": "e129b3bb4b190d218bbafd4bbe45ef4a53e2bd65652ed53a60fbb7bd54d9c559",
+    "ticks": 608,
+    "ticksParSeconde": 29.947189242167223,
+    "publicationsParSeconde": 4.84954483554294,
+    "simulationMs": 1323.041507000049,
+    "serialisationMs": 7689.261807999976,
+    "cpuMs": 16870.963000000003,
+    "superviseurCpuMs": 910.123,
+    "emissionMs": 58.58519900003466,
+    "octetsEmis": 9285152,
+    "receptionHzParClient": [
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773,
+      4.949535450708773
+    ],
+    "ecartSequences": 0
+  },
+  "serveur": {
+    "protocol": 2,
+    "active": 1,
+    "rooms": 2,
+    "bytesEnvoyes": 12566320,
+    "transmissions": 1744,
+    "diffusionsMs": 77.80693700003394,
+    "superviseur": {
+      "rss": 73641984,
+      "rssMax": 73641984,
+      "cpuMs": 1299.519
+    },
+    "parties": [
+      {
+        "initMs": 3704.707853,
+        "ticks": 604,
+        "simMs": 1556.20286300005,
+        "simMax": 216.05110100000002,
+        "serialMs": 8502.166276999977,
+        "publications": 109,
+        "rss": 178434048,
+        "cpuMs": 23229.684,
+        "retardMs": 55.26072899999599,
+        "boucleMaxMs": 216.50989500000014,
+        "rssMax": 178434048,
+        "rawBytes": 4331589,
+        "fullBytes": 177387,
+        "deltaBytes": 7951
+      }
+    ]
+  },
+  "limites": [
+    "Réseau loopback et clients Node, pas seize navigateurs graphiques.",
+    "Machine partagée sans quota CPU : ne dimensionne pas un VPS.",
+    "Échantillon court, sans campagne de charge prolongée."
+  ]
+}

@@ -8,7 +8,7 @@
 // Ce fichier est chargé avant tous les autres.
 
 const LANG_KEY = 'medievalEmperor.lang'; // (nom de la boîte où le navigateur garde la langue choisie)
-const LANG = (() => {
+let LANG = (() => {
   try { return localStorage.getItem(LANG_KEY) === 'fr' ? 'fr' : 'en'; } catch (e) { return 'en'; }
 })();
 

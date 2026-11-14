@@ -1,0 +1,176 @@
+# Prototype autoritaire — protocole 2
+
+## Essayer
+
+Node 24, aucune dépendance serveur ou jeu :
+
+```sh
+AUTHORITATIVE=1 node serveur/serveur.js
+```
+
+Ouvrir `http://localhost:8080/?autoritaire=1` dans deux navigateurs, créer un salon,
+rejoindre son code puis lancer. L'écoute reste sur `127.0.0.1` ; aucun service
+public n'est configuré par ce projet. Le serveur et les deux navigateurs doivent
+tous choisir la version 2. Sans ces options, le relais historique reste disponible.
+Le solo utilise toujours les mêmes scripts par double-clic sur `index.html`.
+
+## Écoute sur socket Unix
+
+`SOCKET_PATH` remplace l'écoute TCP pour un proxy local. Sans cette variable,
+`HOST` et `PORT` gardent leur comportement. Exemple, après préparation du
+répertoire par l'opérateur :
+
+```sh
+umask 0007
+SOCKET_PATH=/run/world/http.sock AUTHORITATIVE=1 node serveur/serveur.js
+```
+
+Cette option est réservée à Unix : chemin absolu explicite, non vide, sans NUL,
+limité à 103 octets pour rester compatible avec les limites de chemins Unix.
+Le serveur ne crée pas le répertoire et ne modifie pas ses permissions. Il
+refuse tout chemin existant, y compris socket actif, fichier, répertoire ou lien
+cassé ; aucune suppression automatique. Une erreur de vérification ou de liaison
+est signalée avec `SOCKET_PATH` et termine le démarrage avec le code 1.
+
+Le répertoire doit appartenir à l'utilisateur du serveur, qui doit pouvoir y
+créer le socket. Par exemple, répertoire **0750**, propriétaire serveur et groupe
+partagé avec le proxy ; `umask 0007` produit un socket **0770**. Le proxy doit
+pouvoir traverser les répertoires parents et se connecter au socket (droit
+d'écriture sur celui-ci sous Linux). Il n'a pas besoin de pouvoir supprimer les
+entrées du répertoire. Adapter UID/GID aux utilisateurs réellement configurés ;
+ne pas ouvrir le répertoire ou le socket à tous les utilisateurs.
+
+Pour un conteneur sans réseau, le proxy et le serveur partagent le **répertoire**
+du socket via un volume, plutôt qu'un montage du fichier socket qui figerait son
+inode. Le proxy transmet HTTP et l'upgrade WebSocket `/ws` au même socket ; les
+navigateurs utilisent son URL HTTP(S) normale avec `?autoritaire=1`. Aucun port
+TCP n'est ouvert par le serveur en mode socket. Cette option ne configure pas
+Docker, le proxy, TLS ni le réseau de l'hôte.
+
+Un arrêt par signal ou un plantage peut laisser le socket sur disque. Avant
+de le retirer, l'opérateur doit confirmer l'arrêt de l'ancien processus ou
+conteneur, puis vérifier le type et le propriétaire du chemin exact. Un refus
+de connexion ne prouve pas à lui seul que le socket est abandonné (permissions,
+espace de noms). Ne jamais effacer un fichier ordinaire à cet emplacement, ni
+ajouter un nettoyage aveugle au démarrage. Les répertoires temporaires du test
+`node --test tests/socket-unix.test.cjs` sont supprimés après arrêt de ses enfants.
+
+## Exécution et état
+
+Le superviseur conserve les salons et les connexions. Il lance `partie.cjs` dans
+un processus enfant par partie. `moteur.cjs` charge les scripts réels, dans leur
+ordre HTML, avec les sorties graphiques neutralisées. `simulation.cjs` valide
+les ordres puis appelle les règles existantes. Les bots et le replay tournent
+dans ce processus. Aucun moteur simplifié ni copie des règles.
+
+La simulation vise 10 tours/s à vitesse ×1, 30 à ×3. Elle publie au maximum
+5 états/s. Un passage de boucle rattrape au plus trois tours ; la dette de temps
+est plafonnée à deux secondes. Sous surcharge, le temps du jeu ralentit.
+La génération bloque uniquement le processus de la partie concernée.
+
+`js/etat.js` est le codec partagé. Son schéma 1 énumère les données publiées :
+carte, royaumes, armées, bâtiments, travaux, diplomatie, reliques, etc. Les
+fonctions, le générateur aléatoire et les caches restent côté serveur.
+Les objets, Maps et Sets sont encodés dans un en-tête JSON ; les tableaux typés
+gardent leurs octets et leur type. Les nombres non finis et `undefined` ont un
+encodage explicite. Les tableaux sont transmis complets au départ, puis sous
+forme de plages d'octets modifiés ; les objets structurés sont renvoyés entiers.
+Chaque publication produit un différentiel compressé en gzip niveau 1. Un complet
+est produit au démarrage, puis seulement sur demande du superviseur lorsqu'un
+client n'a plus la base nécessaire. Les demandes simultanées sont regroupées ;
+le complet et le différentiel de cette publication utilisent la même capture.
+Les buffers compressés sont partagés entre les connexions.
+
+Le navigateur reconstruit une base réseau séparée des données d'affichage.
+Il vérifie partie, protocole, schéma, séquence, base exacte, tailles et contenu
+des tableaux. Il installe ensuite l'état atomiquement et invalide les caches
+visuels. `Game.init`, `Game.update` et `Game.runOrder` ne s'exécutent pas dans le
+client autoritaire. Les noms automatiques se localisent côté affichage.
+
+## Messages et reprise
+
+Les commandes JSON de salon conservent les noms du protocole 1. La négociation
+est `hello {protocol:2,name,banner,langue}`. `start` ajoute identifiant de partie,
+place, jeton de reprise, délai et dernier numéro d'ordre reçu ; ce message part
+avant la génération pour permettre une coupure dès le démarrage.
+
+- `order {s,o}` : numéro strictement croissant ; le serveur attribue la place.
+  Forme, indices réels, demande d'alliance préalable et règles sont vérifiés.
+  Les 32 derniers résultats de chaque place sont inclus dans les états.
+  Le navigateur limite ses ordres en attente à 32 ; les callbacks se déclenchent
+  après installation de l'état correspondant. Rejouer un numéro ne rejoue pas l'action.
+- `state {transfer,seq,bytes,compression:"gzip"}` annonce un transfert, suivi
+  de messages WebSocket binaires de 32 Kio au maximum. `stateAck {transfer,index}`
+  autorise le morceau suivant. Le dernier acquittement confirme la reconstruction.
+  Un seul transfert est en vol par connexion. À son terme, le superviseur choisit
+  le dernier état disponible : différentiel si sa base correspond, complet sinon.
+  Si le complet n'est pas déjà disponible, il attend la prochaine publication
+  demandée à l'enfant (environ 200 ms en régime normal). Les clients à jour
+  continuent à recevoir leurs différentiels pendant cette attente.
+- `resync` demande un état complet. Une mauvaise base ne modifie pas l'état
+  affiché. Le retour d'un onglet déclenche une resynchronisation si nécessaire.
+  Une décompression provenant d'un ancien socket est abandonnée.
+- `resume {code,token}` rattache une connexion à sa place pendant 60 secondes
+  après déconnexion. Le jeton aléatoire de 256 bits reste en mémoire. Le royaume
+  reste humain pendant ce délai ; ensuite il devient bot. Les commandes en attente
+  sont réémises avec leur numéro après reprise. Sans reprise, aucun passage en solo.
+  Le jeton ne survit ni au rechargement de page ni au redémarrage du serveur.
+
+Les actions de pause et de vitesse suivent les droits de l'hôte. Les autres
+joueurs privés disposent de 15 secondes de pause toutes les cinq minutes.
+Un hôte déconnecté cède sa place et libère la pause. Les parties publiques ne
+se mettent pas en pause ; leurs cartes et bots suivent les réglages historiques.
+
+## Bornes
+
+Les limites du [transport commun](PROTOCOLE.md) s'appliquent aussi à la version 2.
+
+| Variable | Défaut | Portée |
+|---|---:|---|
+| `MAX_ACTIVE_GAMES` | 2 | Refus avant création d'un enfant supplémentaire |
+| `MAX_ROOMS` | 32 | Salons, parties et prochain salon public compris |
+| `GAME_HEAP_MB` | 512 | Tas V8 de chaque enfant |
+| `GAME_RSS_MB` | 768 | Arrêt si la RSS observée à une publication dépasse le plafond |
+| `GAME_INIT_SECONDS` | 120 | Délai maximal avant le premier état |
+| `RECONNECT_SECONDS` | 60 | Conservation de la place déconnectée |
+| `AUTH_SPAWN_SECONDS` | 15 | Phase de placement initial |
+
+Seize humains au maximum par partie. Vingt ordres par place par fenêtre de
+100 ms ; files enfant de 320 ordres et 64 contrôles. Une saturation de file ou
+du canal IPC arrête explicitement la partie. Aucun empilement illimité d'états
+sur l'IPC : l'enfant attend l'acquittement du superviseur avant de publier.
+Paquet décompressé limité à 64 Mio, en-tête à 8 Mio, transfert gzip à 16 Mio.
+Sans acquittement de morceau pendant dix secondes, une connexion est fermée.
+Une partie sans connexion ni jeton encore valable est arrêtée.
+
+Le tas V8 n'est pas une limite de RSS. La surveillance RSS est périodique et
+peut constater un dépassement après allocation. Le quota CPU, la limite mémoire
+du superviseur et les limites système du groupe de processus restent à définir
+pour un hébergement. Les processus et la VM ne sont pas un bac à sable système.
+
+`GET /metrics` expose des compteurs agrégés sans jetons ni identifiants de salon :
+initialisation, simulation, sérialisation/compression, octets binaires envoyés,
+temps d'appel d'écriture, CPU, RSS et pic RSS Linux. `boucleMaxMs` est le plus
+grand intervalle entre deux passages de la boucle enfant après initialisation ;
+`retardMs` est sa dette de temps de simulation, incluant la fraction du tour courant.
+Le temps d'émission mesure les appels d'écriture, pas le trajet réseau ni le décodage.
+`complets` compte les complets effectivement préparés. `rawBytes` et `fullBytes`
+valent zéro lorsqu'aucun complet n'accompagne la publication ; `deltaRawBytes`
+et `deltaBytes` donnent les tailles du différentiel avant et après gzip.
+
+## Limites du prototype
+
+- Les résultats et messages directement produits par un ordre, les demandes
+  d'alliance et la fin de partie sont présentés. Les notifications et sons issus
+  des événements automatiques de combat, de construction ou de mines ne sont
+  pas encore tous répliqués. Les données de jeu correspondantes sont publiées.
+- Les scénarios restent solo. Seuls Chromium et le loopback sont testés ici ;
+  Firefox, Safari, mobile, latence, perte réseau et parties prolongées restent à tester.
+- La capture et la recherche de différences parcourent encore les tableaux
+  à chaque publication. Des clients perdant fréquemment leur base peuvent
+  demander un complet à chaque publication ; le plafond reste de 5/s.
+- Pas de compte, de stockage de partie ni de reprise après redémarrage serveur.
+  Pas de nouveau TLS, contrôle d'origine ou quota par adresse dans ce lot.
+  Les jetons nécessitent un transport chiffré pour un hébergement distant.
+- Aucun dimensionnement VPS, déploiement ou fusion. La [recette mesurée](../docs/validation-autoritaire.md)
+  porte sur ce prototype, sans promesse de capacité en production.

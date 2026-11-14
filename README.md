@@ -12,6 +12,12 @@ bâtis moulins, casernes et châteaux, et écrase les royaumes rivaux pour domin
 > Le jeu en ligne est mis à jour automatiquement à chaque nouveauté.
 > Tu peux aussi télécharger le projet et ouvrir `index.html` d'un double-clic.
 
+Ce fork propose un **prototype multijoueur autoritaire** : le serveur calcule la partie et les bots,
+les navigateurs affichent les états reçus et peuvent reprendre après une coupure.
+Il s'active explicitement ; le solo par double-clic reste disponible.
+Voir le [guide du prototype et ses limites](serveur/AUTORITAIRE.md), la
+[recette et les mesures](docs/validation-autoritaire.md). Aucun déploiement de ce prototype sur le site public.
+
 ---
 
 ## 📜 Le jeu en bref
@@ -37,6 +43,12 @@ bâtis moulins, casernes et châteaux, et écrase les royaumes rivaux pour domin
 - 🌍 **En anglais ou en français** : le jeu est en anglais par défaut ; la liste « Langue » en haut à droite du menu le passe en français (le choix est gardé)
 
 ## 🕹️ Comment jouer
+
+**Essayer le prototype multijoueur en local** : avec Node 24, lancer
+`AUTHORITATIVE=1 node serveur/serveur.js`, puis ouvrir
+[http://localhost:8080/?autoritaire=1](http://localhost:8080/?autoritaire=1).
+Créer un salon privé, rejoindre son code depuis un autre navigateur, puis lancer la partie.
+Le même serveur sans `AUTHORITATIVE=1` conserve le relais historique.
 
 1. **Fonde ta capitale** : choisis d'abord la **langue** du jeu en haut à droite du menu (🇬🇧 English, par défaut, ou 🇫🇷 Français : la page se recharge dans la nouvelle langue, en gardant les réglages déjà choisis au menu, et le choix est gardé pour les prochaines fois), puis ta bannière (clique sur le drapeau affiché pour ouvrir la liste de tous les drapeaux, chacun avec son nom dessous : la faction dans un scénario, ou ce qu'il représente dans une partie libre), le **type de carte**, la **difficulté** (Facile, Normale, Difficile, 💀 Extrême : les bots y sont de plus en plus avantagés) et le
    **nombre de royaumes rivaux** (de 3 à 20, autant que de drapeaux disponibles ; au plus un rival pour 5 000 cases de carte : 10 sur la petite carte, réglage `CELLS_PER_OPPONENT`) dans le menu. ⏩ **Vitesse de la partie** : en jeu, le bouton ⏩ en haut (à côté de
@@ -1243,7 +1255,8 @@ bâtis moulins, casernes et châteaux, et écrase les royaumes rivaux pour domin
    plus** se **disperse** : ses dernières terres redeviennent libres (souvent un bout coincé entre un sommet et un
    fleuve, que personne ne pourrait atteindre). Réglage : `REMNANT_TILES` dans `js/config.js`.
 7. **Joue à plusieurs, en ligne** 🌐 : quand le jeu vient d'un **serveur de jeu** (voir
-   [`serveur/PROTOCOLE.md`](serveur/PROTOCOLE.md) : `node serveur/serveur.js`, puis http://localhost:8080), le menu
+   [`serveur/PROTOCOLE.md`](serveur/PROTOCOLE.md) : `node serveur/serveur.js`, puis http://localhost:8080 ;
+   écoute locale par défaut, interface réglable avec `HOST`), le menu
    affiche **🌐 Jouer en ligne** (sous « Commencer la conquête ») :
    - 🌍 **Partie publique** : une partie part **toutes les 2 minutes** avec tous ceux qui attendent, sur une carte tirée
      au hasard (aléatoire ou prédéfinie, annoncée dans le salon avec le compte à rebours) ; des **bots** complètent
@@ -1356,6 +1369,23 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 **Contrôles** : 🔽 la petite **flèche** du titre « Royaumes » (le classement, en haut à droite) cache ou montre le tableau des royaumes · ⛏️ dans la barre du haut, le **nombre de tes mines** (le détail par minerai au survol, et tes mines **clignotent sur la carte** pour les repérer), dès ta première · ⚔️ la **puissance de tes troupes** en % (100 % = des soldats ordinaires ; ta meilleure caserne, tes mines de fer et ta cité impériale la font monter) · 📜 le bouton **Règles**, en haut, met le jeu en pause et affiche les règles complètes, rangées en catégories à déplier d'un clic (Échap ou « Reprendre la partie » pour revenir) · ⏩ le bouton de vitesse fait passer la partie à x1, x1,5, x2 ou x3 · 🎥 déplace la carte en la **glissant** à la souris, ou au clavier avec **ZQSD** (WASD sur un clavier anglais) ou les **flèches** · molette : zoom · en survolant un **autre royaume**, une barre fixe, juste sous ta barre d'infos en haut de l'écran, le résume (👥 soldats, nombre de châteaux, églises, ports, moulins, casernes et avant-postes, quel que soit leur niveau, ⛏️ ses mines avec le détail par minerai, 🗺️ part des terres, et 📿 ses reliques gardées s'il en a) · en survolant un bâtiment qu'on peut sélectionner (un des tiens à améliorer, une cible ennemie), il s'illumine (doré chez toi, rouge chez l'ennemi) · sur la carte, la souris est une petite **main médiévale** (gantelet), qui devient une **épée** sur une cible que tu peux vraiment attaquer (château, église, port, mine ou avant-poste ennemi atteignable, terres ennemies sans défense organisée, armée ennemie qui t'attaque) · en survolant une **armée ennemie** qui t'attaque, un **cercle de ciblage** rouge l'entoure (clic = envoyer tes défenseurs) · molette = zoom · glisser = déplacer la carte · `1` à `5` et `7` (ou `&` `é` `"` `'` `(` `è`) = choisir un bâtiment, `8` (ou `_`) = la tour de gloire sur une carte de gloire (puis clic pour le poser) · clic droit = menu d'actions (attaquer, construire, débarquer, traverser un fleuve) · `U` = ⬆️ **souris d'amélioration** (son curseur est une flèche dorée : chaque clic sur un de tes bâtiments l'améliore tout de suite, pour aller vite quand tu as beaucoup d'or ; un clic droit, `U` ou `Échap` pour l'arrêter) · en posant un bâtiment, une petite **bulle** près de la souris donne son **bonus de production** à cet endroit (« +30 % » en vert, « −20 % » en rouge : terrain et routes compris) · `Espace` ou `P` = pause (la musique d'ambiance s'arrête avec la partie et reprend au même endroit) · bouton **↩ Menu** (barre du haut) = quitter la partie et revenir au menu de départ, après confirmation (la partie se met en pause pendant que tu choisis) · `M` ou le bouton 🎵 (en bas à droite) = couper ou remettre la **musique d'ambiance** (des morceaux tirés au hasard, en fondu, avec toujours un silence de 20 s à 2 min entre deux ; à la victoire, un son de victoire à la place ; un son d'alerte quand tu perds une ville, un son de départ quand ton armée part à l'assaut d'un ennemi (et quand tes défenseurs partent intercepter un assaut, ou qu'un assaut part relier ta ville isolée), un son quand un de tes bâtiments est construit ou finit son amélioration, un autre quand une de tes mines de diamant verse son or, et d'autres quand tu prends une ville, lances une croisade, un assaut viking ou un recrutement de masse, et une alerte quand un ennemi lance un assaut sur toi ; les petits sons se superposent (un nouveau son ne coupe pas celui qui joue encore) ; dans le menu de départ, sa propre musique, coupée au début de la partie), avec une petite **barre de volume** à côté ; tes choix sont gardés pour les parties suivantes · `Échap` / clic droit = annuler une construction
 
 ## 🆕 Nouveautés
+
+- **Fork — écoute Unix (14/11/2026)** : option `SOCKET_PATH` pour placer HTTP et
+  WebSocket derrière un proxy local sans écoute TCP. Les chemins existants sont
+  refusés ; [droits et nettoyage documentés](serveur/AUTORITAIRE.md#écoute-sur-socket-unix).
+
+- **Fork — publication allégée (14/11/2026)** : l'état complet est préparé au démarrage
+  puis à la demande d'une reprise ; les joueurs à jour reçoivent les différentiels.
+  Les reprises simultanées partagent un seul complet. [Comparaison mesurée](docs/optimisation-publication.md).
+
+- **Fork — prototype autoritaire (14/11/2026)** : simulation et bots isolés dans un processus par partie,
+  états complets/différentiels, reprise du même royaume après une coupure pendant 60 secondes,
+  contrôles de ressources. Recette avec deux Chromium réels et charge avec seize joueurs et quatre bots.
+  Activation volontaire ; [limites de cette version](serveur/AUTORITAIRE.md#limites-du-prototype).
+
+- **Fork — socle multijoueur (14/11/2026)** : limites de connexions, salons, fragments et files de sortie ;
+  validation de forme des ordres ; rejoindre un salon inaccessible ne fait plus quitter le salon actuel.
+  Tests du moteur partagé et mesures reproductibles, sans modification des règles ni du solo.
 
 - **v0.98.83** : ⚔️ **le recrutement de masse aide surtout les petits royaumes** : les soldats qu'il donne tout de suite dépendent de ta place au classement des terres : **3 %** de ton armée maximum si tu es 1er, **5 %** 2e, **8 %** 3e, **10 %** de la 4e à la 6e place, et **20 %** au-delà (au lieu de 10 % pour tous). L'infobulle du bouton donne ta part et ta place. Réglage : `LEVY_INSTANT` dans `js/config.js`.
 - **v0.98.82** : 🐛 **une armée ne revole plus en arrière** : si, pendant qu'elle marche vers la frontière, ses terres reculent dans son dos (une ville prise, comme Harfleur), elle attaque à son arrivée **depuis là où elle se trouve**, au lieu de « voler » jusqu'à la nouvelle frontière de son royaume pour recommencer sa traversée (par exemple l'assaut anglais sur Cherbourg).
@@ -1876,6 +1906,9 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 - **v0.1** : première version jouable (carte aléatoire, conquête, or, 3 bâtiments, royaumes rivaux, victoire/défaite)
 
 ## 💡 Idées pour la suite
+
+- **Dans ce fork, prochaines étapes** : compléter les notifications automatiques du mode autoritaire,
+  mesurer les grandes cartes sur un hébergement borné et tester Firefox/Safari et les réseaux dégradés.
 
 - 🤝 Plus de diplomatie : demandes d'aide aux membres du pacte
 - 🗼 Activer la tour de garde dans les parties (le bâtiment est prêt : `TOWERS` dans `js/config.js`)
