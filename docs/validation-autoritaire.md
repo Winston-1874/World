@@ -4,6 +4,9 @@ Architecture [approuvée](multijoueur-autoritaire.md), réalisée sur le socle
 `f371225`, lui-même basé sur `90c922df022206c362835019042f0046ac580373`.
 Le prototype reste volontairement activé par option ; aucun déploiement ni fusion.
 
+Ce rapport décrit le prototype `c60eec2`. L'optimisation ultérieure des états
+complets est mesurée séparément dans [optimisation-publication.md](optimisation-publication.md).
+
 ## Vérifications
 
 Node **24.21.0**, Chromium **156.0.8078.79**, Linux. Les tests chargent les règles

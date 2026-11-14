@@ -90,6 +90,15 @@ function creerAutoritaire({ send, sendFrame, closeConn, cleanSettings, limite, c
     const p = g.current;
     if (c.applied === p.seq) return;
     const bytes = c.applied === p.base && !c.resync ? p.delta : p.full;
+    if (!bytes) {
+      // Une demande par partie, même si plusieurs clients reprennent ensemble.
+      // Les connexions à jour continuent à recevoir les différentiels entre-temps.
+      if (!g.fullRequested && g.child.connected) {
+        g.fullRequested = true;
+        if (!g.child.send({ t: 'full' })) arreter(g.room, 'resources');
+      }
+      return;
+    }
     c.resync = false;
     c.transfer = { id: ++transfert, seq: p.seq, bytes, offset: 0, index: 0, sent: 0, since: Date.now() };
     c.lastTransfer = c.transfer.id;
@@ -116,7 +125,8 @@ function creerAutoritaire({ send, sendFrame, closeConn, cleanSettings, limite, c
       if (m.t === 'saturated' && !g.stopped) return arreter(r, 'resources');
       if (m.t !== 'state' || g.stopped) return;
       g.metrics = m.metrics;
-      if (m.metrics.rss > rssMax || m.full.length > 16 * 1048576 || m.delta.length > 16 * 1048576) return arreter(r, 'resources');
+      if (m.metrics.rss > rssMax || m.full?.length > 16 * 1048576 || m.delta.length > 16 * 1048576) return arreter(r, 'resources');
+      if (m.full) g.fullRequested = false;
       g.current = m;
       for (const s of g.slots) if (s.conn) {
         if (!s.conn.startSent) envoyerDebut(r, s);

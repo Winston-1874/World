@@ -102,3 +102,22 @@ test('une demande de reprise croisant un ancien acquittement conserve la connexi
   await a.wait(c => c.state?.seq > seq);
   assert.equal(a.ws.readyState, WebSocket.OPEN);
 });
+
+test('les complets sont produits à la demande et partagés entre les reprises', { timeout: 12000 }, async t => {
+  const s = await serveur(); t.after(() => s.close());
+  const a = await new Client(s.url).open(), b = await new Client(s.url).open();
+  t.after(() => { a.close(); b.close(); });
+  const metrics = () => fetch(s.url.replace('ws:', 'http:').replace('/ws', '/metrics')).then(r => r.json()).then(m => m.parties[0]);
+  a.send({ t: 'create', settings: { mapSize: 'petit', opponents: 2 } });
+  const room = await a.message('room'); b.send({ t: 'join', code: room.code }); await b.message('room');
+  a.send({ t: 'start' });
+  await a.wait(c => c.state?.seq >= 5);
+  const avant = await metrics();
+  assert.equal(avant.complets, 1, 'aucun complet supplémentaire pour des clients à jour');
+  const seq = a.state.seq;
+  a.send({ t: 'resync' }); b.send({ t: 'resync' });
+  await Promise.all([a.wait(c => c.state.seq > seq), b.wait(c => c.state?.seq > seq)]);
+  assert.equal((await metrics()).complets, 2, 'un seul complet pour les deux clients');
+  await b.wait(c => c.state.seq === a.state.seq);
+  assert.deepEqual(a.state.data, b.state.data);
+});

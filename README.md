@@ -1370,6 +1370,10 @@ ce sont de grandes taches (environ 15 % des plaines et forêts) ; sur la carte *
 
 ## 🆕 Nouveautés
 
+- **Fork — publication allégée (14/11/2026)** : l'état complet est préparé au démarrage
+  puis à la demande d'une reprise ; les joueurs à jour reçoivent les différentiels.
+  Les reprises simultanées partagent un seul complet. [Comparaison mesurée](docs/optimisation-publication.md).
+
 - **Fork — prototype autoritaire (14/11/2026)** : simulation et bots isolés dans un processus par partie,
   états complets/différentiels, reprise du même royaume après une coupure pendant 60 secondes,
   contrôles de ressources. Recette avec deux Chromium réels et charge avec seize joueurs et quatre bots.

@@ -34,8 +34,11 @@ Les objets, Maps et Sets sont encodés dans un en-tête JSON ; les tableaux typ�
 gardent leurs octets et leur type. Les nombres non finis et `undefined` ont un
 encodage explicite. Les tableaux sont transmis complets au départ, puis sous
 forme de plages d'octets modifiés ; les objets structurés sont renvoyés entiers.
-Chaque publication produit un paquet complet et un différentiel, compressés
-en gzip niveau 1 et partagés entre les connexions.
+Chaque publication produit un différentiel compressé en gzip niveau 1. Un complet
+est produit au démarrage, puis seulement sur demande du superviseur lorsqu'un
+client n'a plus la base nécessaire. Les demandes simultanées sont regroupées ;
+le complet et le différentiel de cette publication utilisent la même capture.
+Les buffers compressés sont partagés entre les connexions.
 
 Le navigateur reconstruit une base réseau séparée des données d'affichage.
 Il vérifie partie, protocole, schéma, séquence, base exacte, tailles et contenu
@@ -60,6 +63,9 @@ avant la génération pour permettre une coupure dès le démarrage.
   autorise le morceau suivant. Le dernier acquittement confirme la reconstruction.
   Un seul transfert est en vol par connexion. À son terme, le superviseur choisit
   le dernier état disponible : différentiel si sa base correspond, complet sinon.
+  Si le complet n'est pas déjà disponible, il attend la prochaine publication
+  demandée à l'enfant (environ 200 ms en régime normal). Les clients à jour
+  continuent à recevoir leurs différentiels pendant cette attente.
 - `resync` demande un état complet. Une mauvaise base ne modifie pas l'état
   affiché. Le retour d'un onglet déclenche une resynchronisation si nécessaire.
   Une décompression provenant d'un ancien socket est abandonnée.
@@ -107,6 +113,9 @@ temps d'appel d'écriture, CPU, RSS et pic RSS Linux. `boucleMaxMs` est le plus
 grand intervalle entre deux passages de la boucle enfant après initialisation ;
 `retardMs` est sa dette de temps de simulation, incluant la fraction du tour courant.
 Le temps d'émission mesure les appels d'écriture, pas le trajet réseau ni le décodage.
+`complets` compte les complets effectivement préparés. `rawBytes` et `fullBytes`
+valent zéro lorsqu'aucun complet n'accompagne la publication ; `deltaRawBytes`
+et `deltaBytes` donnent les tailles du différentiel avant et après gzip.
 
 ## Limites du prototype
 
@@ -116,8 +125,9 @@ Le temps d'émission mesure les appels d'écriture, pas le trajet réseau ni le 
   pas encore tous répliqués. Les données de jeu correspondantes sont publiées.
 - Les scénarios restent solo. Seuls Chromium et le loopback sont testés ici ;
   Firefox, Safari, mobile, latence, perte réseau et parties prolongées restent à tester.
-- Les états complets sont recalculés à chaque publication, même sans nouvel
-  arrivant : la sérialisation est encore coûteuse sur les grandes cartes.
+- La capture et la recherche de différences parcourent encore les tableaux
+  à chaque publication. Des clients perdant fréquemment leur base peuvent
+  demander un complet à chaque publication ; le plafond reste de 5/s.
 - Pas de compte, de stockage de partie ni de reprise après redémarrage serveur.
   Pas de nouveau TLS, contrôle d'origine ou quota par adresse dans ce lot.
   Les jetons nécessitent un transport chiffré pour un hébergement distant.

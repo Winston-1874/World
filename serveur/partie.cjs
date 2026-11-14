@@ -8,13 +8,19 @@ let simulation, precedent, seq = 0, turn = 0, dernier = 0, acc = 0, publication 
 let config, commandes = [], controles = [], ticks = 0, simMs = 0, simMax = 0, serialMs = 0, publications = 0;
 let initMs = 0, debutCpu;
 let boucleMaxMs = 0;
+let completDemande = true, complets = 0;
 function publier() {
   if (enVol || !process.connected) return;
   const debut = performance.now(), actuel = Etat.capturer(simulation.Game);
   const info = { game: config.game, seq: ++seq, base: seq - 1, turn, results: simulation.resultats() };
-  const complet = Etat.encoder(actuel, null, info);
+  // Le superviseur demande un complet seulement lorsqu'une connexion a perdu sa base.
+  // La capture courante reste commune au complet et au différentiel de cette séquence.
+  const complet = completDemande ? Etat.encoder(actuel, null, info) : null;
   const diff = precedent ? Etat.encoder(actuel, precedent, info) : complet;
-  const full = gzipSync(complet, { level: 1 }), delta = precedent ? gzipSync(diff, { level: 1 }) : full;
+  const full = complet ? gzipSync(complet, { level: 1 }) : null;
+  const delta = precedent ? gzipSync(diff, { level: 1 }) : full;
+  if (full) complets++;
+  completDemande = false;
   serialMs += performance.now() - debut; publications++;
   const cpu = process.cpuUsage(debutCpu);
   enVol = true;
@@ -22,7 +28,8 @@ function publier() {
     metrics: { initMs, ticks, simMs, simMax, serialMs, publications, rss: process.memoryUsage().rss,
       cpuMs: (cpu.user + cpu.system) / 1000, retardMs: acc, boucleMaxMs,
       rssMax: process.resourceUsage().maxRSS * 1024,
-      rawBytes: complet.length, fullBytes: full.length, deltaBytes: delta.length } });
+      complets, rawBytes: complet?.length || 0, deltaRawBytes: diff.length,
+      fullBytes: full?.length || 0, deltaBytes: delta.length } });
   precedent = actuel;
 }
 process.on('message', m => {
@@ -34,6 +41,7 @@ process.on('message', m => {
     dernier = publication = performance.now();
     publier();
   } else if (m.t === 'received') enVol = false;
+  else if (m.t === 'full') completDemande = true;
   else if (m.t === 'order') {
     if (commandes.length < 320) commandes.push(m);
     else process.send({ t: 'saturated' });

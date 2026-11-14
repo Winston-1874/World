@@ -1,0 +1,45 @@
+{
+  "node": "v24.21.0",
+  "scenario": {
+    "carte": "normal",
+    "taille": "grand",
+    "seed": 123456,
+    "humains": 16,
+    "bots": 4,
+    "vitesse": 3,
+    "secondes": 10,
+    "repriseDemandee": true
+  },
+  "mesure": {
+    "dureeMs": 10002.377796,
+    "repriseExacte": true,
+    "ticks": 302,
+    "publications": 48,
+    "ticksHz": 30.192820763156064,
+    "publicationsHz": 4.798858929243348,
+    "serialMs": 4886.284821999996,
+    "simMs": 747.260804000025,
+    "cpuMs": 9254.497000000001,
+    "complets": 1,
+    "decodeurCpuMs": 985.563
+  },
+  "metrics": {
+    "initMs": 7813.674589,
+    "ticks": 310,
+    "simMs": 1117.712420000028,
+    "simMax": 354.9465400000008,
+    "serialMs": 5444.552657999997,
+    "publications": 54,
+    "rss": 207159296,
+    "cpuMs": 19662.074,
+    "retardMs": 62.03316099999756,
+    "boucleMaxMs": 355.79524800000036,
+    "rssMax": 212115456,
+    "complets": 2,
+    "rawBytes": 0,
+    "deltaRawBytes": 22134,
+    "fullBytes": 0,
+    "deltaBytes": 5885
+  },
+  "limite": "Processus réel et IPC ; décodage de contrôle local, sans navigateur ni diffusion réseau à 16 clients."
+}
